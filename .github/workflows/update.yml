@@ -1,1 +1,93 @@
+name: Update President News
 
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch RSS
+        uses: Promptly-Technologies-LLC/rss-fetch-action@v2
+        with:
+          feed_url: 'https://rsshub.app/president.mn/medee'
+          file_path: './feed.json'
+
+      - name: Generate HTML
+        run: |
+          cat > index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>President.mn News</title>
+            <style>
+              body {
+                font-family: Arial;
+                max-width: 900px;
+                margin: auto;
+                padding: 20px;
+              }
+              .item {
+                border-bottom: 1px solid #ddd;
+                padding: 15px 0;
+              }
+              .date {
+                color: gray;
+                font-size: 14px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>President.mn 最近7天新闻</h1>
+            <div id="news"></div>
+
+            <script>
+              fetch('feed.json')
+                .then(r => r.json())
+                .then(data => {
+                  const news = document.getElementById('news');
+
+                  const now = new Date();
+                  const sevenDaysAgo = new Date();
+                  sevenDaysAgo.setDate(now.getDate() - 7);
+
+                  data.entries.forEach(item => {
+                    const pub = new Date(item.published);
+
+                    if (pub >= sevenDaysAgo) {
+                      const div = document.createElement('div');
+                      div.className = 'item';
+
+                      div.innerHTML = `
+                        <div class="date">${pub.toLocaleString()}</div>
+                        <h2>
+                          <a href="${item.link}" target="_blank">
+                            ${item.title}
+                          </a>
+                        </h2>
+                        <p>${item.description || ''}</p>
+                      `;
+
+                      news.appendChild(div);
+                    }
+                  });
+                });
+            </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Commit files
+        run: |
+          git config --global user.name github-actions
+          git config --global user.email github-actions@github.com
+          git add .
+          git commit -m "update news" || echo "no changes"
+          git push
